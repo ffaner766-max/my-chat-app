@@ -1,8 +1,8 @@
 const CONFIG = {
-    // 👇 ТВОЙ URL
+    // 👇 ПРАВИЛЬНЫЙ URL (без лишних букв)
     SUPABASE_URL: 'https://dnhdlimkkwrvjlqpflmd.supabase.co',
     
-    // 👇 ТВОЙ PUBLISHABLE КЛЮЧ (скопируй полностью)
+    // 👇 ПРАВИЛЬНЫЙ КЛЮЧ
     SUPABASE_KEY: 'sb_publishable_jexjVByiBIOG50yeCLzWJQ_a-c8pz_U',
     
     CASE_COOLDOWN: 1500,
