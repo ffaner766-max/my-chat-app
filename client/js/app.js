@@ -16,20 +16,18 @@ const elements = {
     chatActions: document.querySelectorAll('.chat-actions i'),
     userProfile: null,
     profileModal: null,
-    typingStatus: null,
-    fileInput: null,
     toastContainer: null
 };
 
-// ========== СОСТОЯНИЕ ==========
+// ========== СОСТОЯНИЕ (С СОХРАНЕНИЕМ В LOCALSTORAGE) ==========
 const state = {
-    userId: 'user_' + Math.random().toString(36).substr(2, 9),
-    username: 'User' + Math.floor(Math.random() * 10000),
-    avatarColor: CONFIG.AVATAR_COLORS[Math.floor(Math.random() * CONFIG.AVATAR_COLORS.length)],
+    userId: localStorage.getItem('chat_user_id') || 'user_' + Math.random().toString(36).substr(2, 9),
+    username: localStorage.getItem('chat_username') || 'User' + Math.floor(Math.random() * 10000),
+    avatarColor: localStorage.getItem('chat_avatarColor') || CONFIG.AVATAR_COLORS[Math.floor(Math.random() * CONFIG.AVATAR_COLORS.length)],
     avatarImage: null,
     bannerImage: null,
-    status: 'online',
-    customStatus: '',
+    status: localStorage.getItem('chat_status') || 'online',
+    customStatus: localStorage.getItem('chat_customStatus') || '',
     isCaseCooldown: false,
     currentChannel: 'общий-чат',
     currentServer: 'main',
@@ -37,9 +35,36 @@ const state = {
     supabase: null
 };
 
+// ========== СОХРАНЕНИЕ В LOCALSTORAGE ==========
+function saveState() {
+    localStorage.setItem('chat_user_id', state.userId);
+    localStorage.setItem('chat_username', state.username);
+    localStorage.setItem('chat_avatarColor', state.avatarColor);
+    localStorage.setItem('chat_status', state.status);
+    localStorage.setItem('chat_customStatus', state.customStatus || '');
+}
+
 // ========== ПОДКЛЮЧЕНИЕ К SUPABASE ==========
 async function initSupabase() {
     state.supabase = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+    
+    // Загружаем историю сообщений
+    await loadMessages();
+    
+    // Обновляем онлайн (с очисткой старых записей)
+    await updateOnlineStatus();
+    
+    // Подписываемся на изменения онлайна
+    state.supabase
+        .channel('online_users')
+        .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table: 'online_users' 
+        }, () => {
+            updateOnlineCount();
+        })
+        .subscribe();
     
     // Подписываемся на новые сообщения
     state.supabase
@@ -54,25 +79,9 @@ async function initSupabase() {
             playSound('message');
         })
         .subscribe();
-
-    // Загружаем историю сообщений
-    await loadMessages();
     
-    // Обновляем онлайн
-    await updateOnlineStatus();
-    setInterval(updateOnlineStatus, 15000);
-    
-    // Подписываемся на изменения онлайна
-    state.supabase
-        .channel('online_users')
-        .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'online_users' 
-        }, () => {
-            updateOnlineCount();
-        })
-        .subscribe();
+    // Принудительно обновляем онлайн через 2 секунды
+    setTimeout(updateOnlineStatus, 2000);
 }
 
 // ========== ЗАГРУЗКА СООБЩЕНИЙ ==========
@@ -121,13 +130,20 @@ async function sendMessage() {
 async function updateOnlineStatus() {
     if (!state.supabase) return;
     
+    // Удаляем старые записи (старше 1 минуты)
+    await state.supabase
+        .from('online_users')
+        .delete()
+        .lt('last_seen', new Date(Date.now() - 60000).toISOString());
+    
+    // Обновляем или создаём запись для текущего пользователя
     await state.supabase
         .from('online_users')
         .upsert([{
             user_id: state.userId,
             username: state.username,
             last_seen: new Date().toISOString()
-        }]);
+        }], { onConflict: 'user_id' });
     
     await updateOnlineCount();
 }
@@ -197,7 +213,6 @@ function addMessage(text, isSystem = false, username = null, avatarColor = null,
     const div = document.createElement('div');
     div.className = `message ${isSystem ? 'system' : ''}`;
     div.style.animation = 'fadeIn 0.3s ease';
-    div.dataset.messageId = Date.now();
 
     const displayName = username || state.username;
     const color = avatarColor || state.avatarColor;
@@ -329,6 +344,8 @@ function saveProfile() {
     state.username = newUsername;
     state.status = document.getElementById('profileStatus').value;
     state.customStatus = document.getElementById('profileCustomStatus').value.trim();
+    
+    saveState();
     updateProfileUI();
     elements.profileModal.classList.remove('show');
     showToast('✅ Профиль обновлён!', `Теперь вы ${state.username}`);
@@ -355,13 +372,11 @@ function initEvents() {
         if (e.target === elements.caseOverlay) hideCaseResult();
     });
 
-    elements.channelItems.forEach((item, index) => {
+    elements.channelItems.forEach((item) => {
         item.addEventListener('click', function() {
-            const channelName = this.textContent.trim().split(' ')[0] || 'канал-' + index;
+            const channelName = this.textContent.trim().split(' ')[0] || 'канал';
             switchChannel(channelName, this);
-            // Закрываем меню на телефоне
             document.getElementById('channelsPanel')?.classList.remove('open');
-            document.querySelector('.overlay')?.classList.remove('show');
         });
     });
 
@@ -369,16 +384,6 @@ function initEvents() {
         icon.addEventListener('click', function() {
             const serverId = ['main', 'games', 'gem', 'plus'][index] || 'server-' + index;
             switchServer(serverId, this);
-        });
-    });
-
-    elements.chatActions.forEach((action, index) => {
-        action.addEventListener('click', function() {
-            this.classList.toggle('active');
-            const actions = ['Поиск', 'Закрепить', 'Уведомления', 'Пригласить'];
-            if (actions[index]) {
-                showToast(`🔧 ${actions[index]}`, 'Функция в разработке');
-            }
         });
     });
 
@@ -401,11 +406,10 @@ function initEvents() {
             state.soundEnabled = !state.soundEnabled;
             soundToggle.classList.toggle('active');
             soundToggle.querySelector('i').className = state.soundEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute';
-            showToast(state.soundEnabled ? '🔊 Звук включён' : '🔇 Звук выключен', '');
         });
     }
 
-    // ===== КНОПКА ГАМБУРГЕР (ТЕЛЕФОН) =====
+    // Кнопка гамбургер
     const menuToggle = document.getElementById('menuToggle');
     const channelsPanel = document.getElementById('channelsPanel');
     const overlay = document.createElement('div');
@@ -436,7 +440,7 @@ async function init() {
             </div>
             <div class="user-info">
                 <div class="username">${state.username}</div>
-                <div class="user-status">Без статуса</div>
+                <div class="user-status">${state.customStatus || 'Без статуса'}</div>
             </div>
             <div class="user-actions">
                 <i class="fas fa-microphone"></i>
@@ -470,7 +474,7 @@ async function init() {
                     <div class="profile-status-text">
                         <i class="fas fa-circle" style="color:#23a55a;font-size:12px;"></i>
                         <span id="profileStatusDisplay">Онлайн</span>
-                        <span style="color:#949ba4;margin-left:8px;" id="profileCustomStatusDisplay"></span>
+                        <span style="color:#949ba4;margin-left:8px;" id="profileCustomStatusDisplay">${state.customStatus || ''}</span>
                     </div>
                 </div>
                 <div class="profile-edit">
@@ -478,13 +482,13 @@ async function init() {
                     <input type="text" id="profileUsername" value="${state.username}" />
                     <label>Статус</label>
                     <select id="profileStatus">
-                        <option value="online">🟢 Онлайн</option>
-                        <option value="idle">🟡 Не активен</option>
-                        <option value="dnd">🔴 Не беспокоить</option>
-                        <option value="offline">⚫ Невидимка</option>
+                        <option value="online" ${state.status === 'online' ? 'selected' : ''}>🟢 Онлайн</option>
+                        <option value="idle" ${state.status === 'idle' ? 'selected' : ''}>🟡 Не активен</option>
+                        <option value="dnd" ${state.status === 'dnd' ? 'selected' : ''}>🔴 Не беспокоить</option>
+                        <option value="offline" ${state.status === 'offline' ? 'selected' : ''}>⚫ Невидимка</option>
                     </select>
                     <label>Пользовательский статус</label>
-                    <input type="text" id="profileCustomStatus" placeholder="Напишите статус..." />
+                    <input type="text" id="profileCustomStatus" placeholder="Напишите статус..." value="${state.customStatus || ''}" />
                     <div class="edit-actions">
                         <button class="cancel-btn" id="profileCancel">Отмена</button>
                         <button class="save-btn" id="profileSave">💾 Сохранить</button>
@@ -519,16 +523,24 @@ async function init() {
     }, 500);
 }
 
-// ========== ФИКС ДЛЯ ТЕЛЕФОНА: обновляем онлайн при переключении вкладок ==========
+// ========== ФИКС ДЛЯ ОБНОВЛЕНИЯ ОНЛАЙНА ==========
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
         updateOnlineStatus();
     }
 });
 
-// Обновляем онлайн при загрузке страницы (для телефона)
-window.addEventListener('load', () => {
-    setTimeout(updateOnlineStatus, 2000);
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        updateOnlineStatus();
+    }
 });
+
+// Обновляем онлайн каждые 10 секунд
+setInterval(() => {
+    if (state.supabase) {
+        updateOnlineCount();
+    }
+}, 10000);
 
 document.addEventListener('DOMContentLoaded', init);
