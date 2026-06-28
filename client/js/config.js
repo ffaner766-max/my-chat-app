@@ -1,5 +1,5 @@
 const CONFIG = {
-    // 👇 ПРАВИЛЬНЫЙ URL (без лишних букв)
+    // 👇 ПРАВИЛЬНЫЙ URL (скопируй отсюда!)
     SUPABASE_URL: 'https://dnhdlimkkwrvjlqpflmd.supabase.co',
     
     // 👇 ПРАВИЛЬНЫЙ КЛЮЧ
