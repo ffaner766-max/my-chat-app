@@ -1,8 +1,8 @@
 const CONFIG = {
-    // 👇 ПРАВИЛЬНЫЙ URL (из настроек Supabase)
+    // 👇 ЭТОТ URL ТОЧНО ИЗ ТВОЕГО ПРОЕКТА (скопируй из Settings → API)
     SUPABASE_URL: 'https://dnhdlmkkwrvjqpflmd.supabase.co',
     
-    // 👇 ТВОЙ PUBLISHABLE КЛЮЧ
+    // 👇 ЭТОТ КЛЮЧ ТОЧНО ИЗ ТВОЕГО ПРОЕКТА
     SUPABASE_KEY: 'sb_publishable_jexjVByiBIOG50yeCLzWJQ_a-c8pz_U',
     
     CASE_COOLDOWN: 1500,
