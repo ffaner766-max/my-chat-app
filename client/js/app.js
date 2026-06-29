@@ -20,11 +20,11 @@ const elements = {
 
 // ===== СОСТОЯНИЕ =====
 const state = {
-    userId: localStorage.getItem('chat_user_id') || 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-    username: localStorage.getItem('chat_username') || 'User' + Math.floor(Math.random() * 10000),
-    avatarColor: localStorage.getItem('chat_avatarColor') || CONFIG.AVATAR_COLORS[Math.floor(Math.random() * CONFIG.AVATAR_COLORS.length)],
-    status: localStorage.getItem('chat_status') || 'online',
-    customStatus: localStorage.getItem('chat_customStatus') || '',
+    userId: localStorage.getItem('saizo_user_id') || 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    username: localStorage.getItem('saizo_username') || 'User' + Math.floor(Math.random() * 10000),
+    avatarColor: localStorage.getItem('saizo_avatarColor') || CONFIG.AVATAR_COLORS[Math.floor(Math.random() * CONFIG.AVATAR_COLORS.length)],
+    status: localStorage.getItem('saizo_status') || 'online',
+    customStatus: localStorage.getItem('saizo_customStatus') || '',
     supabase: null,
     isCaseCooldown: false,
     soundEnabled: true
@@ -32,11 +32,11 @@ const state = {
 
 // ===== СОХРАНЕНИЕ =====
 function saveState() {
-    localStorage.setItem('chat_user_id', state.userId);
-    localStorage.setItem('chat_username', state.username);
-    localStorage.setItem('chat_avatarColor', state.avatarColor);
-    localStorage.setItem('chat_status', state.status);
-    localStorage.setItem('chat_customStatus', state.customStatus || '');
+    localStorage.setItem('saizo_user_id', state.userId);
+    localStorage.setItem('saizo_username', state.username);
+    localStorage.setItem('saizo_avatarColor', state.avatarColor);
+    localStorage.setItem('saizo_status', state.status);
+    localStorage.setItem('saizo_customStatus', state.customStatus || '');
 }
 
 // ===== ИНИЦИАЛИЗАЦИЯ =====
@@ -46,7 +46,6 @@ async function initSupabase() {
     await registerUser();
     await loadMessages();
     
-    // Подписка на новые сообщения
     state.supabase
         .channel('messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
@@ -56,7 +55,6 @@ async function initSupabase() {
         })
         .subscribe();
     
-    // Подписка на изменения онлайна
     state.supabase
         .channel('online_users')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'online_users' }, () => {
@@ -111,7 +109,7 @@ async function loadMessages() {
         .limit(100);
     
     if (error) {
-        console.error('Ошибка загрузки сообщений:', error);
+        console.error('Ошибка загрузки:', error);
         return;
     }
     
@@ -345,8 +343,8 @@ function switchChannel(channelName, element) {
 function switchServer(serverId, element) {
     elements.serverIcons.forEach(icon => icon.classList.remove('active'));
     if (element) element.classList.add('active');
-    const names = { main: '🎮 Игровой сервер', games: '🎯 Игровой сервер', gem: '💎 Гем сервер' };
-    document.querySelector('.server-name').innerHTML = (names[serverId] || '🎮 Игровой сервер') + ' <i class="fas fa-chevron-down"></i>';
+    const names = { main: '🎮 PROJECT SAIZO', games: '🎯 PROJECT SAIZO', gem: '💎 PROJECT SAIZO' };
+    document.querySelector('.server-name').innerHTML = (names[serverId] || '🎮 PROJECT SAIZO') + ' <i class="fas fa-chevron-down"></i>';
     elements.messages.innerHTML = '';
     setTimeout(() => {
         addSystemMessage(`🔄 Переключились на сервер ${names[serverId] || ''}`);
@@ -490,7 +488,7 @@ async function init() {
     await initSupabase();
     
     setTimeout(() => {
-        addSystemMessage(`👋 Добро пожаловать, ${state.username}!`);
+        addSystemMessage(`👋 Добро пожаловать в PROJECT SAIZO, ${state.username}!`);
         addSystemMessage(`💡 Напиши сообщение или открой кейс!`);
     }, 500);
 }
