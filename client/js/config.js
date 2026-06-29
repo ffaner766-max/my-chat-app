@@ -1,8 +1,8 @@
 const CONFIG = {
-    // 👇 ЭТОТ URL ТОЧНО ИЗ ТВОЕГО ПРОЕКТА (скопируй из Settings → API)
-    SUPABASE_URL: 'https://dnhdlmkkwrvjqpflmd.supabase.co',
+    // 👇 ТВОЙ РЕАЛЬНЫЙ URL
+    SUPABASE_URL: 'https://dnhdlimkkwrvjlqpflmd.supabase.co',
     
-    // 👇 ЭТОТ КЛЮЧ ТОЧНО ИЗ ТВОЕГО ПРОЕКТА
+    // 👇 ТВОЙ PUBLISHABLE КЛЮЧ
     SUPABASE_KEY: 'sb_publishable_jexjVByiBIOG50yeCLzWJQ_a-c8pz_U',
     
     CASE_COOLDOWN: 1500,
