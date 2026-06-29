@@ -1,6 +1,6 @@
 import CONFIG from './config.js';
 
-// ===== DOM элементы =====
+// ===== DOM =====
 const elements = {
     messages: document.getElementById('messages'),
     onlineCount: document.getElementById('onlineCount'),
@@ -39,17 +39,14 @@ function saveState() {
     localStorage.setItem('chat_customStatus', state.customStatus || '');
 }
 
-// ===== ИНИЦИАЛИЗАЦИЯ SUPABASE =====
+// ===== ИНИЦИАЛИЗАЦИЯ =====
 async function initSupabase() {
     state.supabase = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
     
-    // 1. Регистрируем пользователя
     await registerUser();
-    
-    // 2. Загружаем сообщения
     await loadMessages();
     
-    // 3. Подписываемся на новые сообщения
+    // Подписка на новые сообщения
     state.supabase
         .channel('messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
@@ -59,7 +56,7 @@ async function initSupabase() {
         })
         .subscribe();
     
-    // 4. Подписываемся на изменения онлайна
+    // Подписка на изменения онлайна
     state.supabase
         .channel('online_users')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'online_users' }, () => {
@@ -67,15 +64,13 @@ async function initSupabase() {
         })
         .subscribe();
     
-    // 5. Обновляем онлайн каждые 10 секунд
     await updateOnlineStatus();
     setInterval(updateOnlineStatus, 10000);
     setInterval(updateOnlineCount, 5000);
 }
 
-// ===== РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЯ =====
+// ===== РЕГИСТРАЦИЯ =====
 async function registerUser() {
-    // Проверяем, есть ли пользователь в базе
     const { data: existing } = await state.supabase
         .from('online_users')
         .select('*')
@@ -83,7 +78,6 @@ async function registerUser() {
         .maybeSingle();
     
     if (existing) {
-        // Если есть — загружаем данные
         state.username = existing.username;
         state.avatarColor = existing.avatar_color || state.avatarColor;
         state.status = existing.status || 'online';
@@ -93,8 +87,7 @@ async function registerUser() {
         return;
     }
     
-    // Если нет — создаём нового
-    const { error } = await state.supabase
+    await state.supabase
         .from('online_users')
         .insert([{
             user_id: state.userId,
@@ -105,14 +98,11 @@ async function registerUser() {
             last_seen: new Date().toISOString()
         }]);
     
-    if (error) {
-        console.error('Ошибка регистрации:', error);
-    }
     saveState();
     updateProfileUI();
 }
 
-// ===== ЗАГРУЗКА СООБЩЕНИЙ =====
+// ===== СООБЩЕНИЯ =====
 async function loadMessages() {
     const { data, error } = await state.supabase
         .from('messages')
@@ -131,7 +121,6 @@ async function loadMessages() {
     });
 }
 
-// ===== ОТПРАВКА СООБЩЕНИЯ =====
 async function sendMessage() {
     const text = elements.messageInput.value.trim();
     if (!text || !state.supabase) return;
@@ -158,7 +147,6 @@ async function sendMessage() {
 async function updateOnlineStatus() {
     if (!state.supabase) return;
     
-    // Обновляем время последнего визита
     await state.supabase
         .from('online_users')
         .update({ last_seen: new Date().toISOString() })
@@ -223,7 +211,7 @@ function hideCaseResult() {
     elements.caseOverlay.classList.remove('show');
 }
 
-// ===== СООБЩЕНИЯ (UI) =====
+// ===== UI =====
 function addMessage(text, isSystem = false, username = null, avatarColor = null, userId = null) {
     const div = document.createElement('div');
     div.className = `message ${isSystem ? 'system' : ''}`;
