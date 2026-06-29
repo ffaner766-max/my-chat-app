@@ -21,8 +21,8 @@ const elements = {
 
 // ========== СОСТОЯНИЕ (С СОХРАНЕНИЕМ В LOCALSTORAGE) ==========
 const state = {
-    userId: localStorage.getItem('chat_user_id') || 'user_' + Math.random().toString(36).substr(2, 9),
-    username: localStorage.getItem('chat_username') || 'User' + Math.floor(Math.random() * 10000),
+    userId: localStorage.getItem('chat_user_id') || null,
+    username: localStorage.getItem('chat_username') || null,
     avatarColor: localStorage.getItem('chat_avatarColor') || CONFIG.AVATAR_COLORS[Math.floor(Math.random() * CONFIG.AVATAR_COLORS.length)],
     avatarImage: null,
     bannerImage: null,
@@ -32,7 +32,8 @@ const state = {
     currentChannel: 'общий-чат',
     currentServer: 'main',
     soundEnabled: true,
-    supabase: null
+    supabase: null,
+    isInitialized: false
 };
 
 // ========== СОХРАНЕНИЕ В LOCALSTORAGE ==========
@@ -48,10 +49,13 @@ function saveState() {
 async function initSupabase() {
     state.supabase = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
     
+    // ✅ ПРОВЕРЯЕМ: есть ли пользователь в базе?
+    await checkOrCreateUser();
+    
     // Загружаем историю сообщений
     await loadMessages();
     
-    // Обновляем онлайн (с очисткой старых записей)
+    // Обновляем онлайн
     await updateOnlineStatus();
     
     // Подписываемся на изменения онлайна
@@ -80,8 +84,50 @@ async function initSupabase() {
         })
         .subscribe();
     
-    // Принудительно обновляем онлайн через 2 секунды
-    setTimeout(updateOnlineStatus, 2000);
+    state.isInitialized = true;
+}
+
+// ========== ПРОВЕРКА/СОЗДАНИЕ ПОЛЬЗОВАТЕЛЯ ==========
+async function checkOrCreateUser() {
+    // Если userId есть в localStorage — проверяем его в базе
+    if (state.userId) {
+        const { data, error } = await state.supabase
+            .from('online_users')
+            .select('*')
+            .eq('user_id', state.userId)
+            .single();
+        
+        if (data) {
+            // Пользователь найден — загружаем его данные
+            state.username = data.username;
+            state.avatarColor = data.avatar_color || state.avatarColor;
+            state.status = data.status || 'online';
+            state.customStatus = data.custom_status || '';
+            saveState();
+            updateProfileUI();
+            return;
+        }
+        // Если пользователь не найден — создаём нового
+    }
+    
+    // Создаём нового пользователя
+    state.userId = 'user_' + Math.random().toString(36).substr(2, 9);
+    state.username = 'User' + Math.floor(Math.random() * 10000);
+    state.avatarColor = CONFIG.AVATAR_COLORS[Math.floor(Math.random() * CONFIG.AVATAR_COLORS.length)];
+    saveState();
+    updateProfileUI();
+    
+    // Сохраняем в базу
+    await state.supabase
+        .from('online_users')
+        .upsert([{
+            user_id: state.userId,
+            username: state.username,
+            avatar_color: state.avatarColor,
+            status: state.status,
+            custom_status: state.customStatus,
+            last_seen: new Date().toISOString()
+        }], { onConflict: 'user_id' });
 }
 
 // ========== ЗАГРУЗКА СООБЩЕНИЙ ==========
@@ -142,6 +188,9 @@ async function updateOnlineStatus() {
         .upsert([{
             user_id: state.userId,
             username: state.username,
+            avatar_color: state.avatarColor,
+            status: state.status,
+            custom_status: state.customStatus,
             last_seen: new Date().toISOString()
         }], { onConflict: 'user_id' });
     
@@ -348,6 +397,19 @@ function saveProfile() {
     saveState();
     updateProfileUI();
     elements.profileModal.classList.remove('show');
+    
+    // ✅ Обновляем ник в базе
+    state.supabase
+        .from('online_users')
+        .upsert([{
+            user_id: state.userId,
+            username: state.username,
+            avatar_color: state.avatarColor,
+            status: state.status,
+            custom_status: state.customStatus,
+            last_seen: new Date().toISOString()
+        }], { onConflict: 'user_id' });
+    
     showToast('✅ Профиль обновлён!', `Теперь вы ${state.username}`);
 }
 
@@ -435,11 +497,11 @@ async function init() {
     const profileHTML = `
         <div class="user-profile">
             <div class="avatar" style="background: ${state.avatarColor}">
-                ${state.username[0].toUpperCase()}
+                ${state.username ? state.username[0].toUpperCase() : '?'}
                 <div class="status-dot online"></div>
             </div>
             <div class="user-info">
-                <div class="username">${state.username}</div>
+                <div class="username">${state.username || 'Загрузка...'}</div>
                 <div class="user-status">${state.customStatus || 'Без статуса'}</div>
             </div>
             <div class="user-actions">
@@ -462,11 +524,11 @@ async function init() {
                 </div>
                 <div class="profile-avatar-wrapper">
                     <div class="profile-avatar" id="profileAvatarPreview" style="background: ${state.avatarColor}">
-                        ${state.username[0].toUpperCase()}
+                        ${state.username ? state.username[0].toUpperCase() : '?'}
                         <div class="avatar-edit-overlay"><i class="fas fa-camera"></i></div>
                     </div>
                     <div class="profile-username-info">
-                        <div class="profile-username">${state.username}</div>
+                        <div class="profile-username">${state.username || 'Загрузка...'}</div>
                         <div class="profile-discord-tag">#${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}</div>
                     </div>
                 </div>
@@ -479,7 +541,7 @@ async function init() {
                 </div>
                 <div class="profile-edit">
                     <label>Имя пользователя</label>
-                    <input type="text" id="profileUsername" value="${state.username}" />
+                    <input type="text" id="profileUsername" value="${state.username || ''}" />
                     <label>Статус</label>
                     <select id="profileStatus">
                         <option value="online" ${state.status === 'online' ? 'selected' : ''}>🟢 Онлайн</option>
@@ -525,13 +587,7 @@ async function init() {
 
 // ========== ФИКС ДЛЯ ОБНОВЛЕНИЯ ОНЛАЙНА ==========
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-        updateOnlineStatus();
-    }
-});
-
-window.addEventListener('pageshow', (event) => {
-    if (event.persisted) {
+    if (!document.hidden && state.supabase) {
         updateOnlineStatus();
     }
 });
